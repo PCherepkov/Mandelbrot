@@ -1,4 +1,3 @@
-
 'use strict';
 
 const vxShaderStr = `#version 300 es
@@ -19,6 +18,9 @@ precision highp float;
 
 uniform float uTime;
 uniform vec2 uDelta;
+uniform float uZoom;
+uniform float uReAdd;
+uniform float uImAdd;
 
 out vec4 oColor;
 
@@ -37,7 +39,7 @@ float Mandl(vec2 z0)
   while (c < 255.0 && z.x * z.x + z.y * z.y <= 4.0)
   {
     z = Sqr(z);
-    z = vec2(z.x + z0.x, z.y + z0.y);
+    z = vec2(z.x + uReAdd, z.y + uImAdd);
     c++;
   }
   return c / 255.0;
@@ -47,8 +49,11 @@ void main(void)
 {
   vec2 Z;
   float color;
+
+  float x = (gl_FragCoord.x - uDelta.x) / 208.0 / (1.0 + uZoom / 10.0) - 2.0;
+  float y = (gl_FragCoord.y + uDelta.y) / 208.0 / (1.0 + uZoom / 10.0) - 2.0;
  
-  Z = vec2((gl_FragCoord.x + uDelta.x / 75.0) / 208.0 - 2.0, (gl_FragCoord.y + uDelta.y / 75.0) / 208.0 - 2.0);
+  Z = vec2(x, y);
   color = Mandl(Z);
   oColor = vec4(color, color, 0, 1);
 }`;
@@ -112,6 +117,9 @@ function initShaders () {
   shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, 'uMVMatrix');
   shaderProgram.uTime = gl.getUniformLocation(shaderProgram, 'uTime');
   shaderProgram.uDelta = gl.getUniformLocation(shaderProgram, 'uDelta');
+  shaderProgram.uZoom = gl.getUniformLocation(shaderProgram, 'uZoom');
+  shaderProgram.uReAdd = gl.getUniformLocation(shaderProgram, 'uReAdd');
+  shaderProgram.uImAdd = gl.getUniformLocation(shaderProgram, 'uImAdd');
 }
 
 var mvMatrix = mat4.create();
@@ -119,32 +127,28 @@ var pMatrix = mat4.create();
 var timeMs = Date.now();
 var startTime = Date.now();
 
-var startPos = new Vec2(0.0, 0.0);
-var endPos = new Vec2(0.0, 0.0);
 var delta = new Vec2(0.0, 0.0);
 var oldDelta = new Vec2(0.0, 0.0);
 var oldMousePos = new Vec2(0, 0);
 var newMousePos = new Vec2(0, 0);
-var flag = 0
+var flag = false;
+var zoom = 0;
+var rAdd = 0.34;
+var iAdd = -0.07;
 
 function setUniforms () {
   gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
   gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
   gl.uniform1f(shaderProgram.uTime, timeMs);
 
-  let newDelta = new Vec2(endPos.x - startPos.x, endPos.y - startPos.y);
-  delta = new Vec2(delta.x + endPos.x - startPos.x, delta.x + endPos.y - startPos.y);
-  // console.log(delta.x, delta.y);
-  // console.log(newDelta.x, newDelta.y, oldDelta.x, oldDelta.y);
-  oldDelta = new Vec2(newDelta.x, newDelta.y);
   if (flag) {
     delta = new Vec2(delta.x + newMousePos.x - oldMousePos.x, delta.y + newMousePos.y - oldMousePos.y);
-    flag = 0;
   }
   let data = [delta.x, delta.y];
   gl.uniform2fv(shaderProgram.uDelta, data);
-  // startPos = new Vec2(0, 0);
-  // endPos = new Vec2(0, 0);
+  gl.uniform1f(shaderProgram.uZoom, zoom);
+  gl.uniform1f(shaderProgram.uReAdd, rAdd);
+  gl.uniform1f(shaderProgram.uImAdd, iAdd);
 }
 
 var squareVertexPositionBuffer;
@@ -183,23 +187,30 @@ function drawScene () {
 function tick () {
   window.requestAnimationFrame(tick);
   drawScene();
-  // console.log(pos[0]);
-  // console.log('tick' + new Date());
 }
 
 function mouseDown (e) {
-  flag = 1
+  flag = true;
 }
 
 function mouseMove (e) {
-  flag = 1;
   oldMousePos = new Vec2(newMousePos.x, newMousePos.y);
   newMousePos = new Vec2(e.x, e.y);
 }
 
 function mouseUp (e) {
-  flag = 0
+  flag = false;
 }
+
+function mouseWheel (e) {
+  zoom -= e.deltaY / 100;
+  console.log(zoom / 10.0 + 1.0);
+}
+
+var FizzyText = function() {
+  this.rPartAdd = 0.34;
+  this.iPartAdd = -0.07;
+};
 
 function webGLStart () {
   let canvas = document.getElementById('webglCanvas');
@@ -213,6 +224,20 @@ function webGLStart () {
   canvas.addEventListener('mousedown', mouseDown);
   canvas.addEventListener('mouseup', mouseUp);
   canvas.addEventListener('mousemove', mouseMove);
+  canvas.addEventListener('mousewheel', mouseWheel);
+
+  let text = new FizzyText();
+  let gui = new dat.GUI();
+  var rAddControl = gui.add(text, 'rPartAdd', -1, 1);
+  var iAddControl = gui.add(text, 'iPartAdd', -1, 1);
+
+  rAddControl.onChange(function (val) {
+    rAdd = val;
+  });
+
+  iAddControl.onChange(function (val) {
+    iAdd = val;
+  });
 
   tick();
 }
