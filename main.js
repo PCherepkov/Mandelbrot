@@ -204,7 +204,6 @@ function mouseUp (e) {
 
 function mouseWheel (e) {
   zoom -= e.deltaY / 100;
-  console.log(zoom / 10.0 + 1.0);
 }
 
 var FizzyText = function() {
